@@ -1,0 +1,269 @@
+<!--
+
+hardloop-pid.html - Copyright 2026 Harshad Joshi and Bufferstack.IO Analytics Technology LLP, Pune
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+https://opensource.org/licenses/Apache-2.0
+
+-->
+
+<script type="text/javascript">
+  RED.nodes.registerType('hardloop-pid-controller', {
+    category: 'Bufferstack.IO PID Hard Loop',
+    color: '#c0392b',
+    defaults: {
+      name:             { value: '' },
+      // PID gains
+      k_p:              { value: 1.2,   required: true,  validate: RED.validators.number() },
+      k_i:              { value: 1.0,   required: true,  validate: RED.validators.number() },
+      k_d:              { value: 0.01,  required: true,  validate: RED.validators.number() },
+      dt:               { value: 1.0,   required: true,  validate: RED.validators.number() },
+      // AI (input) count range
+      ai_count_min:     { value: 0,     required: true,  validate: RED.validators.number() },
+      ai_count_max:     { value: 4000,  required: true,  validate: RED.validators.number() },
+      // AO (output) count range
+      ao_count_min:     { value: 0,     required: true,  validate: RED.validators.number() },
+      ao_count_max:     { value: 4000,  required: true,  validate: RED.validators.number() },
+      // Engineering unit range
+      eu_min:           { value: 0,     required: true,  validate: RED.validators.number() },
+      eu_max:           { value: 100,   required: true,  validate: RED.validators.number() },
+      // Signal type
+      signal_type:      { value: '4-20mA' },
+      // PID safety limits
+      output_min:       { value: 0,     required: false, validate: RED.validators.number() },
+      output_max:       { value: 100,   required: false, validate: RED.validators.number() },
+      int_min:          { value: -500,  required: false, validate: RED.validators.number() },
+      int_max:          { value: 500,   required: false, validate: RED.validators.number() },
+      deadband:         { value: 0,     required: false, validate: RED.validators.number() },
+      settled_tol:      { value: 0,     required: false, validate: RED.validators.number() },
+      // Watchdog
+      watchdog_timeout: { value: 3000,  required: true,  validate: RED.validators.number() },
+      safe_ao_count:    { value: 0,     required: true,  validate: RED.validators.number() },
+      // Derivative filter
+      deriv_filter:     { value: 1.0,   required: false, validate: RED.validators.number() },
+    },
+    inputs:  1,
+    outputs: 1,
+    icon: 'font-awesome/fa-microchip',
+    label: function () { return this.name || 'hardloop-pid'; },
+    paletteLabel: 'hardloop-pid',
+    labelStyle: function () { return this.name ? 'node_label_italic' : ''; },
+  });
+</script>
+
+<script type="text/html" data-template-name="hardloop-pid-controller">
+
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name">
+  </div>
+
+  <hr/>
+  <p><b>PID Gains</b></p>
+
+  <div class="form-row">
+    <label for="node-input-k_p"><i class="fa fa-calculator"></i> Kp</label>
+    <input type="number" id="node-input-k_p" step="any">
+  </div>
+  <div class="form-row">
+    <label for="node-input-k_i"><i class="fa fa-calculator"></i> Ki</label>
+    <input type="number" id="node-input-k_i" step="any">
+  </div>
+  <div class="form-row">
+    <label for="node-input-k_d"><i class="fa fa-calculator"></i> Kd</label>
+    <input type="number" id="node-input-k_d" step="any">
+  </div>
+  <div class="form-row">
+    <label for="node-input-dt"><i class="fa fa-clock-o"></i> Loop dt (s)</label>
+    <input type="number" id="node-input-dt" step="any" min="0.05">
+    <span style="font-size:0.82em;color:#888;">Target scan interval. Min 50ms recommended for Node-RED.</span>
+  </div>
+
+  <hr/>
+  <p><b>AI Input — Count Range (from PLC analog input card)</b></p>
+
+  <div class="form-row">
+    <label for="node-input-ai_count_min"><i class="fa fa-arrow-down"></i> AI Count Min</label>
+    <input type="number" id="node-input-ai_count_min" step="1">
+    <span style="font-size:0.82em;color:#888;">Usually 0. For 4-20mA with live-zero offset set as per card datasheet.</span>
+  </div>
+  <div class="form-row">
+    <label for="node-input-ai_count_max"><i class="fa fa-arrow-up"></i> AI Count Max</label>
+    <input type="number" id="node-input-ai_count_max" step="1">
+    <span style="font-size:0.82em;color:#888;">4000 / 8000 / 16000 — check your AI card specification.</span>
+  </div>
+
+  <hr/>
+  <p><b>AO Output — Count Range (for PLC analog output card)</b></p>
+
+  <div class="form-row">
+    <label for="node-input-ao_count_min"><i class="fa fa-arrow-down"></i> AO Count Min</label>
+    <input type="number" id="node-input-ao_count_min" step="1">
+  </div>
+  <div class="form-row">
+    <label for="node-input-ao_count_max"><i class="fa fa-arrow-up"></i> AO Count Max</label>
+    <input type="number" id="node-input-ao_count_max" step="1">
+    <span style="font-size:0.82em;color:#888;">AO card may differ from AI card. Check AO card datasheet separately.</span>
+  </div>
+
+  <hr/>
+  <p><b>Engineering Unit Range</b></p>
+
+  <div class="form-row">
+    <label for="node-input-eu_min"><i class="fa fa-minus"></i> EU Min</label>
+    <input type="number" id="node-input-eu_min" step="any">
+  </div>
+  <div class="form-row">
+    <label for="node-input-eu_max"><i class="fa fa-plus"></i> EU Max</label>
+    <input type="number" id="node-input-eu_max" step="any">
+    <span style="font-size:0.82em;color:#888;">Full-scale engineering value (e.g. 100 for 0-100°C, 10 for 0-10 bar).</span>
+  </div>
+
+  <div class="form-row">
+    <label for="node-input-signal_type"><i class="fa fa-bolt"></i> Signal Type</label>
+    <select id="node-input-signal_type">
+      <option value="4-20mA">4–20 mA</option>
+      <option value="0-10V">0–10 V</option>
+    </select>
+  </div>
+
+  <hr/>
+  <p><b>PID Safety Limits</b></p>
+
+  <div class="form-row">
+    <label for="node-input-output_min"><i class="fa fa-arrow-down"></i> Output Min (EU)</label>
+    <input type="number" id="node-input-output_min" step="any">
+  </div>
+  <div class="form-row">
+    <label for="node-input-output_max"><i class="fa fa-arrow-up"></i> Output Max (EU)</label>
+    <input type="number" id="node-input-output_max" step="any">
+  </div>
+  <div class="form-row">
+    <label for="node-input-int_min"><i class="fa fa-minus-circle"></i> Integral Min</label>
+    <input type="number" id="node-input-int_min" step="any">
+  </div>
+  <div class="form-row">
+    <label for="node-input-int_max"><i class="fa fa-plus-circle"></i> Integral Max</label>
+    <input type="number" id="node-input-int_max" step="any">
+  </div>
+  <div class="form-row">
+    <label for="node-input-deadband"><i class="fa fa-bullseye"></i> Deadband (EU)</label>
+    <input type="number" id="node-input-deadband" step="any" min="0">
+  </div>
+  <div class="form-row">
+    <label for="node-input-settled_tol"><i class="fa fa-check-circle"></i> Settled Tolerance (EU)</label>
+    <input type="number" id="node-input-settled_tol" step="any" min="0">
+  </div>
+  <div class="form-row">
+    <label for="node-input-deriv_filter"><i class="fa fa-filter"></i> Derivative Filter α</label>
+    <input type="number" id="node-input-deriv_filter" step="any" min="0.01" max="1.0">
+    <span style="font-size:0.82em;color:#888;">0.1 = heavy filter (noisy ADC), 1.0 = no filter. Reduces ADC quantisation noise on D term.</span>
+  </div>
+
+  <hr/>
+  <p><b>Watchdog &amp; Safe State</b></p>
+
+  <div class="form-row">
+    <label for="node-input-watchdog_timeout"><i class="fa fa-shield"></i> Watchdog (ms)</label>
+    <input type="number" id="node-input-watchdog_timeout" step="1" min="100">
+    <span style="font-size:0.82em;color:#888;">If PV not received within this time, output goes to safe AO count. Recommended: 3× loop dt.</span>
+  </div>
+  <div class="form-row">
+    <label for="node-input-safe_ao_count"><i class="fa fa-exclamation-triangle"></i> Safe AO Count</label>
+    <input type="number" id="node-input-safe_ao_count" step="1">
+    <span style="font-size:0.82em;color:#888;">AO count written on watchdog trip or fault. Typically 0 (valve closed) or a fail-safe position.</span>
+  </div>
+
+</script>
+
+<script type="text/html" data-help-name="hardloop-pid-controller">
+  <p>
+    A hard-loop PID controller for soft-PLC platforms where Node-RED
+    <strong>is the control runtime</strong> (Kunbus RevPi, Siemens IOT2050, Wago PFC200,
+    Advantech ADAM, Beckhoff CX, Linux soft-PLC).
+  </p>
+  <p>
+    Unlike <code>easy-pid-controller</code> (supervisory), this node accepts
+    <strong>raw ADC counts</strong> as PV input, converts them to engineering units
+    internally, runs the PID in EU domain, then converts the output back to
+    <strong>AO counts</strong> for direct hardware register write.
+    A built-in watchdog forces the output to a safe count if PV stops updating.
+  </p>
+
+  <h3>Input Topics</h3>
+  <dl class="message-properties">
+    <dt>PV <span class="property-type">number (integer count)</span></dt>
+    <dd>Raw count from PLC AI register. Converted to EU internally before PID computation.</dd>
+
+    <dt>SV <span class="property-type">number (engineering units)</span></dt>
+    <dd>Setpoint in engineering units (°C, bar, RPM…). Resets integral and derivative state.</dd>
+
+    <dt>auto <span class="property-type">boolean</span></dt>
+    <dd><code>true</code> — start hard loop. <code>false</code> — stop loop, switch to manual.</dd>
+
+    <dt>gains <span class="property-type">object</span></dt>
+    <dd>Runtime gain update: <code>{ k_p, k_i, k_d }</code></dd>
+
+    <dt>mode <span class="property-type">string</span></dt>
+    <dd><code>"auto"</code> or <code>"manual"</code>. Bumpless transfer on manual→auto.</dd>
+
+    <dt>manual_output <span class="property-type">number (EU)</span></dt>
+    <dd>Fixed EU output for manual mode. Seeds bumpless transfer on return to auto.</dd>
+
+    <dt>reset <span class="property-type">any</span></dt>
+    <dd>Clears integral, derivative, fault state, and timestamps.</dd>
+  </dl>
+
+  <h3>Output Payload</h3>
+  <dl class="message-properties">
+    <dt>AO_count <span class="property-type">integer</span></dt>
+    <dd><strong>Write this directly to your PLC AO register.</strong> Integer count within [ao_count_min, ao_count_max].</dd>
+
+    <dt>PV_count <span class="property-type">integer</span></dt>
+    <dd>Raw AI count as received.</dd>
+
+    <dt>PV_eu <span class="property-type">number</span></dt>
+    <dd>PV converted to engineering units.</dd>
+
+    <dt>SV_eu <span class="property-type">number</span></dt>
+    <dd>Current setpoint in engineering units.</dd>
+
+    <dt>error_eu <span class="property-type">number</span></dt>
+    <dd>SV_eu − PV_eu.</dd>
+
+    <dt>P, I, D <span class="property-type">number</span></dt>
+    <dd>PID components in engineering units.</dd>
+
+    <dt>output_eu <span class="property-type">number</span></dt>
+    <dd>Raw clamped PID output in engineering units.</dd>
+
+    <dt>Signal <span class="property-type">number</span></dt>
+    <dd>Output in physical signal units (mA or V) for tracing and display.</dd>
+
+    <dt>fault <span class="property-type">boolean</span></dt>
+    <dd><code>true</code> if watchdog has tripped. Loop stops and AO_count = safe_ao_count.</dd>
+
+    <dt>watchdog_ok <span class="property-type">boolean</span></dt>
+    <dd><code>true</code> on every healthy cycle. Feed to hardware watchdog if available.</dd>
+
+    <dt>scan_ms <span class="property-type">number</span></dt>
+    <dd>Actual scan execution time in milliseconds. Monitor for loop jitter.</dd>
+
+    <dt>mode <span class="property-type">string</span></dt>
+    <dd><code>"auto"</code>, <code>"manual"</code>, or <code>"fault"</code>.</dd>
+  </dl>
+
+  <h3>Important Notes</h3>
+  <ul>
+    <li><b>PV must be in counts</b> — not engineering units. The node does the conversion.</li>
+    <li><b>SV must be in engineering units</b> — not counts.</li>
+    <li><b>AO_count is an integer</b> — wire the output directly to your Modbus/SLMP/OPC UA write node targeting the AO register.</li>
+    <li><b>Watchdog:</b> Set to at least 3× your loop dt. On trip, AO_count = safe_ao_count and loop stops. Send a valid PV then <code>auto:true</code> to recover.</li>
+    <li><b>AI and AO count ranges can differ</b> — configure each separately to match your actual card datasheets.</li>
+    <li><b>Derivative filter α:</b> Set below 1.0 if ADC noise causes D term chatter. Start with 0.3 for noisy signals.</li>
+    <li><b>Not suitable for fast loops</b> (&lt;100ms) — Node-RED event loop jitter makes it unsafe for position, speed, or torque control.</li>
+  </ul>
+</script>
