@@ -1,0 +1,65 @@
+{
+  "name": "node-red-contrib-hardloop-pid-controller",
+  "version": "1.0.0",
+  "description": "A hard-loop PID controller node for Node-RED on soft-PLC platforms. Accepts raw ADC counts as PV input, runs PID in engineering units, and outputs AO counts for direct hardware register writes. Built for Kunbus RevPi, Siemens IOT2050, Wago PFC200, Advantech ADAM, Beckhoff CX, and any Linux-based soft-PLC with Node-RED.",
+  "main": "hardloop-pid.js",
+  "scripts": {
+    "test": "echo \"No tests defined\" && exit 0"
+  },
+  "keywords": [
+    "node-red",
+    "pid",
+    "pid-controller",
+    "hardloop",
+    "soft-plc",
+    "industrial",
+    "automation",
+    "iiot",
+    "adc",
+    "analog",
+    "4-20ma",
+    "0-10v",
+    "revpi",
+    "iot2050",
+    "wago",
+    "modbus",
+    "opc-ua",
+    "scada",
+    "control-loop",
+    "watchdog"
+  ],
+  "node-red": {
+    "version": ">=2.0.0",
+    "nodes": {
+      "hardloop-pid-controller": "hardloop-pid.js"
+    }
+  },
+  "dependencies": {
+    "simple-pid-controller": "^2.0.1"
+  },
+  "peerDependencies": {
+    "@node-red/runtime": ">=2.0.0"
+  },
+  "author": {
+    "name": "Harshad Joshi",
+    "url": "https://github.com/hj91"
+  },
+  "contributors": [
+    {
+      "name": "Bufferstack.IO Analytics Technology LLP",
+      "url": "https://bufferstack.io"
+    }
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hj91/node-red-contrib-hardloop-pid-controller.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hj91/node-red-contrib-hardloop-pid-controller/issues"
+  },
+  "homepage": "https://github.com/hj91/node-red-contrib-hardloop-pid-controller#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
