@@ -1,6 +1,6 @@
 {
   "name": "node-red-contrib-hardloop-pid-controller",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A hard-loop PID controller node for Node-RED on soft-PLC platforms. Accepts raw ADC counts as PV input, runs PID in engineering units, and outputs AO counts for direct hardware register writes. Built for Kunbus RevPi, Siemens IOT2050, Wago PFC200, Advantech ADAM, Beckhoff CX, and any Linux-based soft-PLC with Node-RED.",
   "main": "hardloop-pid.js",
   "scripts": {
